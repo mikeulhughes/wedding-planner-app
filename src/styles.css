@@ -1,0 +1,934 @@
+import { createContext, useContext, useEffect, useState } from 'react';
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+
+const API_BASE = 'http://localhost:3001/api';
+const AuthContext = createContext(null);
+
+const apiFetch = async (endpoint, options = {}) => {
+  const token = localStorage.getItem('token');
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Request failed');
+  }
+
+  return data;
+};
+
+function useAuth() {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+
+  return context;
+}
+
+function AuthProvider({ children }) {
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [user, setUser] = useState(() => {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
+
+  const login = ({ token: nextToken, user: nextUser }) => {
+    setToken(nextToken);
+    setUser(nextUser);
+    localStorage.setItem('token', nextToken);
+    localStorage.setItem('user', JSON.stringify(nextUser));
+  };
+
+  const logout = () => {
+    setToken('');
+    setUser(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  return <AuthContext.Provider value={{ token, user, login, logout }}>{children}</AuthContext.Provider>;
+}
+
+function ProtectedRoute({ children }) {
+  const { token } = useAuth();
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function LoginPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+
+      login({ token: response.token, user: response.user });
+      navigate('/dashboard');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-card">
+        <p className="eyebrow">Welcome back</p>
+        <h1>Login</h1>
+        <form onSubmit={handleSubmit} className="stacked-form">
+          <label>
+            Email
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              value={form.password}
+              onChange={(event) => setForm({ ...form, password: event.target.value })}
+              required
+            />
+          </label>
+
+          {error && <p className="error-text">{error}</p>}
+
+          <button disabled={loading} className="primary-btn">
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          Need an account? <NavLink to="/register">Register here</NavLink>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RegisterPage() {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+
+      login({ token: response.token, user: response.user });
+      navigate('/dashboard');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-card">
+        <p className="eyebrow">Start planning</p>
+        <h1>Create account</h1>
+        <form onSubmit={handleSubmit} className="stacked-form">
+          <label>
+            Name
+            <input
+              type="text"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              required
+            />
+          </label>
+          <label>
+            Email
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              value={form.password}
+              onChange={(event) => setForm({ ...form, password: event.target.value })}
+              required
+            />
+          </label>
+
+          {error && <p className="error-text">{error}</p>}
+
+          <button disabled={loading} className="primary-btn">
+            {loading ? 'Creating account...' : 'Create account'}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          Already have an account? <NavLink to="/login">Login here</NavLink>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DashboardPage() {
+  const [summary, setSummary] = useState({ counts: {}, wedding: null });
+  const [form, setForm] = useState({ name: '', date: '', style: '', notes: '' });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const loadSummary = async () => {
+    try {
+      const data = await apiFetch('/dashboard');
+      setSummary(data);
+      setForm({
+        name: data.wedding?.name || '',
+        date: data.wedding?.date || '',
+        style: data.wedding?.style || '',
+        notes: data.wedding?.notes || ''
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    loadSummary();
+  }, []);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await apiFetch('/wedding', {
+        method: 'PUT',
+        body: JSON.stringify(form)
+      });
+
+      setSummary((current) => ({ ...current, wedding: response.wedding }));
+      setMessage('Wedding profile saved successfully.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="content-area">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Dashboard</p>
+          <h1>{summary.wedding?.name || 'Your wedding'}</h1>
+        </div>
+      </div>
+
+      <div className="stats-grid">
+        <article className="stat-card accent-one">
+          <span>Venues</span>
+          <strong>{summary.counts?.venues || 0}</strong>
+        </article>
+        <article className="stat-card accent-two">
+          <span>Guests</span>
+          <strong>{summary.counts?.guests || 0}</strong>
+        </article>
+        <article className="stat-card accent-three">
+          <span>Vendors</span>
+          <strong>{summary.counts?.vendors || 0}</strong>
+        </article>
+        <article className="stat-card accent-four">
+          <span>Decor ideas</span>
+          <strong>{summary.counts?.decorations || 0}</strong>
+        </article>
+      </div>
+
+      <div className="panel-grid two-column">
+        <section className="panel">
+          <h2>Wedding profile</h2>
+          <form onSubmit={handleSubmit} className="stacked-form">
+            <label>
+              Wedding name
+              <input
+                type="text"
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+              />
+            </label>
+            <label>
+              Wedding date
+              <input
+                type="date"
+                value={form.date}
+                onChange={(event) => setForm({ ...form, date: event.target.value })}
+              />
+            </label>
+            <label>
+              Style theme
+              <input
+                type="text"
+                value={form.style}
+                onChange={(event) => setForm({ ...form, style: event.target.value })}
+              />
+            </label>
+            <label>
+              Notes
+              <textarea
+                rows="4"
+                value={form.notes}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+              />
+            </label>
+
+            {message && <p className="info-text">{message}</p>}
+
+            <button className="primary-btn" disabled={loading} type="submit">
+              {loading ? 'Saving...' : 'Save profile'}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <h2>Key planning details</h2>
+          <ul className="detail-list">
+            <li>
+              <span>Wedding date</span>
+              <strong>{summary.wedding?.date || 'Not set yet'}</strong>
+            </li>
+            <li>
+              <span>Style direction</span>
+              <strong>{summary.wedding?.style || 'Not set yet'}</strong>
+            </li>
+            <li>
+              <span>Notes</span>
+              <strong>{summary.wedding?.notes || 'No notes yet'}</strong>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function VenuePage() {
+  const [venues, setVenues] = useState([]);
+  const [form, setForm] = useState({ name: '', category: '', location: '', guests: 120, price: '', description: '' });
+  const [editingId, setEditingId] = useState(null);
+
+  const loadVenues = async () => {
+    const data = await apiFetch('/venues');
+    setVenues(data);
+  };
+
+  useEffect(() => {
+    loadVenues();
+  }, []);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      ...form,
+      guests: Number(form.guests)
+    };
+
+    if (editingId) {
+      await apiFetch(`/venues/${editingId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await apiFetch('/venues', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    }
+
+    setForm({ name: '', category: '', location: '', guests: 120, price: '', description: '' });
+    setEditingId(null);
+    loadVenues();
+  };
+
+  const remove = async (id) => {
+    await apiFetch(`/venues/${id}`, { method: 'DELETE' });
+    loadVenues();
+  };
+
+  const startEdit = (venue) => {
+    setEditingId(venue.id);
+    setForm({
+      name: venue.name,
+      category: venue.category,
+      location: venue.location,
+      guests: venue.guests,
+      price: venue.price,
+      description: venue.description
+    });
+  };
+
+  return (
+    <div className="content-area">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Venue planning</p>
+          <h1>Locations</h1>
+        </div>
+      </div>
+
+      <div className="panel-grid two-column">
+        <section className="panel">
+          <h2>{editingId ? 'Edit venue' : 'Add venue'}</h2>
+          <form onSubmit={submit} className="stacked-form">
+            <label>
+              Name
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+            </label>
+            <label>
+              Category
+              <input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} required />
+            </label>
+            <label>
+              Location
+              <input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} required />
+            </label>
+            <label>
+              Capacity
+              <input type="number" value={form.guests} onChange={(event) => setForm({ ...form, guests: event.target.value })} required />
+            </label>
+            <label>
+              Price
+              <input value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required />
+            </label>
+            <label>
+              Description
+              <textarea rows="4" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} required />
+            </label>
+
+            <button className="primary-btn" type="submit">
+              {editingId ? 'Update venue' : 'Add venue'}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <h2>Venue shortlist</h2>
+          <div className="card-list">
+            {venues.map((venue) => (
+              <article key={venue.id} className="record-card">
+                <div className="record-header">
+                  <div>
+                    <h3>{venue.name}</h3>
+                    <p>{venue.category}</p>
+                  </div>
+                  <span className="badge">{venue.location}</span>
+                </div>
+                <p>{venue.description}</p>
+                <div className="inline-details">
+                  <span>{venue.guests} guests</span>
+                  <span>{venue.price}</span>
+                </div>
+                <div className="item-actions">
+                  <button type="button" className="soft-btn" onClick={() => startEdit(venue)}>Edit</button>
+                  <button type="button" className="danger-btn" onClick={() => remove(venue.id)}>Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function GuestPage() {
+  const [guests, setGuests] = useState([]);
+  const [form, setForm] = useState({ name: '', guest_group: 'Family', rsvp: 'Pending', meal: 'Standard' });
+  const [editingId, setEditingId] = useState(null);
+
+  const loadGuests = async () => {
+    const data = await apiFetch('/guests');
+    setGuests(data);
+  };
+
+  useEffect(() => {
+    loadGuests();
+  }, []);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (editingId) {
+      await apiFetch(`/guests/${editingId}`, {
+        method: 'PUT',
+        body: JSON.stringify(form)
+      });
+    } else {
+      await apiFetch('/guests', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+    }
+
+    setForm({ name: '', guest_group: 'Family', rsvp: 'Pending', meal: 'Standard' });
+    setEditingId(null);
+    loadGuests();
+  };
+
+  const remove = async (id) => {
+    await apiFetch(`/guests/${id}`, { method: 'DELETE' });
+    loadGuests();
+  };
+
+  const startEdit = (guest) => {
+    setEditingId(guest.id);
+    setForm({
+      name: guest.name,
+      guest_group: guest.guest_group,
+      rsvp: guest.rsvp,
+      meal: guest.meal
+    });
+  };
+
+  return (
+    <div className="content-area">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Guest planning</p>
+          <h1>Guest list</h1>
+        </div>
+      </div>
+
+      <div className="panel-grid two-column">
+        <section className="panel">
+          <h2>{editingId ? 'Edit guest' : 'Add guest'}</h2>
+          <form onSubmit={submit} className="stacked-form">
+            <label>
+              Guest name
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+            </label>
+            <label>
+              Group
+              <select value={form.guest_group} onChange={(event) => setForm({ ...form, guest_group: event.target.value })}>
+                <option>Family</option>
+                <option>Friends</option>
+                <option>Work</option>
+                <option>Other</option>
+              </select>
+            </label>
+            <label>
+              RSVP status
+              <select value={form.rsvp} onChange={(event) => setForm({ ...form, rsvp: event.target.value })}>
+                <option>Pending</option>
+                <option>Confirmed</option>
+                <option>Declined</option>
+              </select>
+            </label>
+            <label>
+              Meal
+              <select value={form.meal} onChange={(event) => setForm({ ...form, meal: event.target.value })}>
+                <option>Standard</option>
+                <option>Vegetarian</option>
+                <option>Vegan</option>
+                <option>Gluten-free</option>
+              </select>
+            </label>
+
+            <button className="primary-btn" type="submit">
+              {editingId ? 'Update guest' : 'Add guest'}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <h2>Guest list</h2>
+          <div className="card-list">
+            {guests.map((guest) => (
+              <article key={guest.id} className="record-card">
+                <div className="record-header">
+                  <div>
+                    <h3>{guest.name}</h3>
+                    <p>{guest.guest_group}</p>
+                  </div>
+                  <span className={`status-chip status-${guest.rsvp.toLowerCase()}`}>{guest.rsvp}</span>
+                </div>
+                <div className="inline-details">
+                  <span>{guest.meal}</span>
+                </div>
+                <div className="item-actions">
+                  <button type="button" className="soft-btn" onClick={() => startEdit(guest)}>Edit</button>
+                  <button type="button" className="danger-btn" onClick={() => remove(guest.id)}>Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function VendorPage() {
+  const [vendors, setVendors] = useState([]);
+  const [form, setForm] = useState({ name: '', vendor_type: 'Photography', package_name: '', price: '', description: '' });
+  const [editingId, setEditingId] = useState(null);
+
+  const loadVendors = async () => {
+    const data = await apiFetch('/vendors');
+    setVendors(data);
+  };
+
+  useEffect(() => {
+    loadVendors();
+  }, []);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (editingId) {
+      await apiFetch(`/vendors/${editingId}`, {
+        method: 'PUT',
+        body: JSON.stringify(form)
+      });
+    } else {
+      await apiFetch('/vendors', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+    }
+
+    setForm({ name: '', vendor_type: 'Photography', package_name: '', price: '', description: '' });
+    setEditingId(null);
+    loadVendors();
+  };
+
+  const remove = async (id) => {
+    await apiFetch(`/vendors/${id}`, { method: 'DELETE' });
+    loadVendors();
+  };
+
+  const startEdit = (vendor) => {
+    setEditingId(vendor.id);
+    setForm({
+      name: vendor.name,
+      vendor_type: vendor.vendor_type,
+      package_name: vendor.package_name,
+      price: vendor.price,
+      description: vendor.description
+    });
+  };
+
+  return (
+    <div className="content-area">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Vendor planning</p>
+          <h1>Photographers & DJs</h1>
+        </div>
+      </div>
+
+      <div className="panel-grid two-column">
+        <section className="panel">
+          <h2>{editingId ? 'Edit vendor' : 'Add vendor'}</h2>
+          <form onSubmit={submit} className="stacked-form">
+            <label>
+              Vendor type
+              <select value={form.vendor_type} onChange={(event) => setForm({ ...form, vendor_type: event.target.value })}>
+                <option>Photography</option>
+                <option>Video</option>
+                <option>DJ</option>
+                <option>Music</option>
+              </select>
+            </label>
+            <label>
+              Business name
+              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+            </label>
+            <label>
+              Package
+              <input value={form.package_name} onChange={(event) => setForm({ ...form, package_name: event.target.value })} required />
+            </label>
+            <label>
+              Price
+              <input value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required />
+            </label>
+            <label>
+              Description
+              <textarea rows="4" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} required />
+            </label>
+
+            <button className="primary-btn" type="submit">
+              {editingId ? 'Update vendor' : 'Add vendor'}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <h2>Vendor list</h2>
+          <div className="card-list">
+            {vendors.map((vendor) => (
+              <article key={vendor.id} className="record-card">
+                <div className="record-header">
+                  <div>
+                    <h3>{vendor.name}</h3>
+                    <p>{vendor.vendor_type}</p>
+                  </div>
+                  <span className="badge">{vendor.package_name}</span>
+                </div>
+                <p>{vendor.description}</p>
+                <div className="inline-details">
+                  <span>{vendor.price}</span>
+                </div>
+                <div className="item-actions">
+                  <button type="button" className="soft-btn" onClick={() => startEdit(vendor)}>Edit</button>
+                  <button type="button" className="danger-btn" onClick={() => remove(vendor.id)}>Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function DecorationPage() {
+  const [decorations, setDecorations] = useState([]);
+  const [form, setForm] = useState({ title: '', notes: '' });
+  const [editingId, setEditingId] = useState(null);
+
+  const loadDecorations = async () => {
+    const data = await apiFetch('/decorations');
+    setDecorations(data);
+  };
+
+  useEffect(() => {
+    loadDecorations();
+  }, []);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (editingId) {
+      await apiFetch(`/decorations/${editingId}`, {
+        method: 'PUT',
+        body: JSON.stringify(form)
+      });
+    } else {
+      await apiFetch('/decorations', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+    }
+
+    setForm({ title: '', notes: '' });
+    setEditingId(null);
+    loadDecorations();
+  };
+
+  const remove = async (id) => {
+    await apiFetch(`/decorations/${id}`, { method: 'DELETE' });
+    loadDecorations();
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setForm({ title: item.title, notes: item.notes || '' });
+  };
+
+  return (
+    <div className="content-area">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Decor planning</p>
+          <h1>Decoration ideas</h1>
+        </div>
+      </div>
+
+      <div className="panel-grid two-column">
+        <section className="panel">
+          <h2>{editingId ? 'Edit decor idea' : 'Add decor idea'}</h2>
+          <form onSubmit={submit} className="stacked-form">
+            <label>
+              Title
+              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
+            </label>
+            <label>
+              Notes
+              <textarea rows="4" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+            </label>
+
+            <button className="primary-btn" type="submit">
+              {editingId ? 'Update idea' : 'Add idea'}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel">
+          <h2>Decor list</h2>
+          <div className="card-list">
+            {decorations.map((item) => (
+              <article key={item.id} className="record-card">
+                <div className="record-header">
+                  <div>
+                    <h3>{item.title}</h3>
+                  </div>
+                </div>
+                <p>{item.notes || 'No notes added yet.'}</p>
+                <div className="item-actions">
+                  <button type="button" className="soft-btn" onClick={() => startEdit(item)}>Edit</button>
+                  <button type="button" className="danger-btn" onClick={() => remove(item.id)}>Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function AppShell() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+
+  const navItems = [
+    { name: 'Dashboard', path: '/dashboard' },
+    { name: 'Venues', path: '/venues' },
+    { name: 'Guests', path: '/guests' },
+    { name: 'Vendors', path: '/vendors' },
+    { name: 'Decor', path: '/decorations' }
+  ];
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand-wrap">
+          <div className="brand-mark">E</div>
+          <div>
+            <p className="eyebrow">Wedding planning</p>
+            <h1>Ever After Planner</h1>
+          </div>
+        </div>
+
+        {user && (
+          <div className="top-actions">
+            <span className="user-indicator">Hi, {user.name}</span>
+            <button className="soft-btn" type="button" onClick={logout}>Logout</button>
+          </div>
+        )}
+      </header>
+
+      {user && (
+        <nav className="main-nav">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+            >
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
+      )}
+
+      <main className="content-wrap">
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/venues"
+            element={
+              <ProtectedRoute>
+                <VenuePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/guests"
+            element={
+              <ProtectedRoute>
+                <GuestPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vendors"
+            element={
+              <ProtectedRoute>
+                <VendorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/decorations"
+            element={
+              <ProtectedRoute>
+                <DecorationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+}
