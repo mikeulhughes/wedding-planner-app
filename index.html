@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ever After Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-mark">E</div>
+        <div>
+          <p class="eyebrow">Wedding planning</p>
+          <h1>Ever After Planner</h1>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="Main navigation">
+        <a href="#venues">Venues</a>
+        <a href="#guests">Guests</a>
+        <a href="#photography">Photography</a>
+        <a href="#djs">DJ</a>
+        <a href="#decorations">Decor</a>
+      </nav>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Planning dashboard</p>
+          <h2>Build your dream wedding from one place.</h2>
+          <p>
+            Track venues, guest details, vendors, and design ideas to make your big day feel effortless.
+          </p>
+        </div>
+        <div class="hero-card">
+          <p>Wedding timeline</p>
+          <ul>
+            <li>Venue shortlist: 3 options</li>
+            <li>Guest list: 48 confirmed</li>
+            <li>Final styling: soft romantic minimal</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="stats-grid" aria-label="Wedding overview stats">
+        <article class="stat-card accent-one">
+          <span class="label">Guest list</span>
+          <strong id="guest-count">0</strong>
+          <small>Invited</small>
+        </article>
+        <article class="stat-card accent-two">
+          <span class="label">Venues</span>
+          <strong id="venue-count">0</strong>
+          <small>Shortlisted</small>
+        </article>
+        <article class="stat-card accent-three">
+          <span class="label">Photographers</span>
+          <strong id="photo-count">0</strong>
+          <small>Available</small>
+        </article>
+        <article class="stat-card accent-four">
+          <span class="label">DJ packages</span>
+          <strong id="dj-count">0</strong>
+          <small>Options</small>
+        </article>
+      </section>
+
+      <section id="venues" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Location</p>
+            <h3>Choose your venue</h3>
+          </div>
+          <button class="soft-btn" type="button">Compare options</button>
+        </div>
+        <div id="venue-list" class="card-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="guests" class="panel split-layout">
+        <div class="form-panel">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Guest list</p>
+              <h3>Add guests</h3>
+            </div>
+          </div>
+
+          <form id="guest-form">
+            <div class="field-group">
+              <label for="guest-name">Guest name</label>
+              <input id="guest-name" name="guest-name" type="text" placeholder="e.g. Alex Smith" required />
+            </div>
+
+            <div class="field-group">
+              <label for="guest-group">Group</label>
+              <select id="guest-group" name="guest-group">
+                <option value="Family">Family</option>
+                <option value="Friends">Friends</option>
+                <option value="Work">Work</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label for="guest-rsvp">RSVP status</label>
+              <select id="guest-rsvp" name="guest-rsvp">
+                <option value="Pending">Pending</option>
+                <option value="Confirmed">Confirmed</option>
+                <option value="Declined">Declined</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label for="guest-meal">Meal choice</label>
+              <select id="guest-meal" name="guest-meal">
+                <option value="Standard">Standard</option>
+                <option value="Vegetarian">Vegetarian</option>
+                <option value="Vegan">Vegan</option>
+                <option value="Gluten-free">Gluten-free</option>
+              </select>
+            </div>
+
+            <button type="submit" class="primary-btn">Add guest</button>
+          </form>
+        </div>
+
+        <div class="guest-panel">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h3>Guest summary</h3>
+            </div>
+          </div>
+          <div id="guest-summary" class="guest-summary"></div>
+          <ul id="guest-list" class="guest-list"></ul>
+        </div>
+      </section>
+
+      <section id="photography" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Photos & video</p>
+            <h3>Capture the day</h3>
+          </div>
+        </div>
+        <div id="photography-list" class="card-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="djs" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Music</p>
+            <h3>Book your DJ</h3>
+          </div>
+        </div>
+        <div id="dj-list" class="card-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="decorations" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Decor</p>
+            <h3>Style the wedding</h3>
+          </div>
+        </div>
+
+        <div class="decor-layout">
+          <div id="decor-list" class="tag-cloud" aria-live="polite"></div>
+          <div class="decor-board">
+            <h4>Preferred design direction</h4>
+            <p>
+              Soft florals, candlelit tables, gold accents, airy linen textures, and a romantic modern palette.
+            </p>
+            <div class="color-palette">
+              <span class="swatch blush"></span>
+              <span class="swatch ivory"></span>
+              <span class="swatch sage"></span>
+              <span class="swatch gold"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
